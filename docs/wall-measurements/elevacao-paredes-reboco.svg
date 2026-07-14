@@ -128,7 +128,7 @@
 
   <rect x="120" y="766" width="860" height="16" class="slab"/>
   <rect x="120" y="1198" width="860" height="14" class="slab"/>
-  <text x="988" y="778" class="lbl">TETO (pé-direito 2,60)</text>
+  <text x="1090" y="778" text-anchor="end" class="lbl">TETO (pé-dir. 2,60)</text>
   <text x="988" y="1210" class="lbl">PISO</text>
 
   <rect x="150" y="782" width="184" height="416" class="wall"/>
@@ -139,7 +139,7 @@
   <text x="660" y="800" text-anchor="middle" class="lbl">VERGA / TESTEIRA h = 0,15</text>
 
   <line x1="334" y1="870" x2="398" y2="806" stroke="#b02020" stroke-width="3" stroke-dasharray="7 4"/>
-  <text x="415" y="852" class="lbl" fill="#b02020" transform="rotate(-45 415 852)">≈ 0,60 (borda irregular)</text>
+  <text x="420" y="862" class="lbl" fill="#b02020" transform="rotate(-45 420 862)">≈ 0,60</text>
 
   <line x1="334" y1="870" x2="334" y2="1198" stroke="#333" stroke-width="2"/>
   <line x1="910" y1="806" x2="910" y2="1198" stroke="#333" stroke-width="2"/>
@@ -190,7 +190,7 @@
   </g>
 
   <!-- ===================== PAREDE 3 ===================== -->
-  <text x="150" y="1362" class="titp">PAREDE 3 — ELEVAÇÃO (nicho junto às tubulações)</text>
+  <text x="150" y="1362" class="titp">PAREDE 3 — ELEVAÇÃO (nicho das tubulações)</text>
 
   <rect x="120" y="1366" width="320" height="16" class="slab"/>
   <rect x="120" y="1798" width="320" height="14" class="slab"/>
@@ -229,7 +229,7 @@
   </g>
 
   <!-- ===================== PAREDE 4 ===================== -->
-  <text x="620" y="1362" class="titp">PAREDE 4 — ELEVAÇÃO (faixa junto ao vão externo)</text>
+  <text x="640" y="1362" class="titp">PAREDE 4 — ELEVAÇÃO (vão externo)</text>
 
   <rect x="620" y="1798" width="300" height="14" class="slab"/>
   <text x="928" y="1810" class="lbl">PISO</text>
