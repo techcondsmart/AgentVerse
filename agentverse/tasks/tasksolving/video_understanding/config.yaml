@@ -1,0 +1,256 @@
+# =====================================================================
+# Video Understanding swarm — an anti-hallucination, temporally-grounded
+# reasoning team built on AgentVerse's tasksolving paradigm.
+#
+# Perception (frame sampling + Whisper ASR + caption ensemble + VideoRAG
+# index) runs BEFORE this config, in agentverse/video/pipeline.py, and
+# freezes an auditable evidence store. This swarm then reasons ONLY over
+# that fixed evidence — so every claim is checkable and reproducible.
+#
+# Role -> anti-hallucination function:
+#   role_assigner : recruits complementary perception analysts (visual /
+#                   audio / temporal / on-screen-text) so no modality is lost
+#   solver        : drafts an answer where EVERY claim cites a [mm:ss] +
+#                   evidence id retrieved from the index (no citation = no claim)
+#   critic(s)     : Chain-of-Verification — turn the draft into verification
+#                   questions, answer each independently against the evidence,
+#                   and reject any ungrounded / hallucinated / temporally-wrong
+#                   claim. Only emit [Agree] when every claim is grounded.
+#   executor      : the retrieval tool — pulls the exact timestamped evidence
+#                   the critics demand from VideoEvidenceIndex.query(...)
+#   evaluator     : groundedness gate — score 1 only if 100% of claims are
+#                   backed by cited evidence and temporal order is consistent.
+#
+# Backbone LLMs are intentionally MIXED across roles: an independent critic
+# model catches a solver model's blind spots (multi-agent debate effect).
+# =====================================================================
+
+cnt_agents: &cnt_agents 4
+max_turn: &max_turn 5
+max_criticizing_rounds: 3
+
+prompts:
+  role_assigner_prepend_prompt: &role_assigner_prepend_prompt |-
+    # Role Description
+    You are the lead of a video-analysis unit. To answer the request below
+    correctly and WITHOUT hallucination, recruit a small team of complementary
+    perception analysts. The video has already been perceived into timestamped
+    evidence (visual captions + speech transcript), which the team will query.
+
+    Request about the video:
+    ${task_description}
+
+    You can recruit ${cnt_critic_agents} experts. Which analysts will best
+    cross-cover the evidence so nothing is missed or invented?
+
+  role_assigner_append_prompt: &role_assigner_append_prompt |-
+    # Response Format Guidance
+    Respond with a list of expert descriptions. Prefer complementary coverage,
+    e.g.:
+    1. a visual-scene analyst who reasons over frame captions and on-screen text (OCR).
+    2. an audio/dialogue analyst who reasons over the speech transcript.
+    3. a temporal-reasoning analyst who verifies the ORDER, DURATION and causality of events.
+    4. a skeptical fact-checker who assumes every claim is false until it cites evidence.
+
+    Only respond with the description of each role. Do not include your reason.
+
+  solver_prepend_prompt: &solver_prepend_prompt |-
+    # Task
+    Answer the following request about the video using ONLY the retrieved
+    evidence. Evidence items look like:  [mm:ss | vision|audio | agreement=0.xx] text
+    ${task_description}
+
+    # Retrieved evidence
+    ${preliminary_solution}
+    ${advice}
+
+  solver_append_prompt: &solver_append_prompt |-
+    You are ${role_description}.
+    Rules you MUST follow:
+    1. Every factual statement MUST cite at least one evidence timestamp, e.g. "(00:42)".
+    2. If the evidence does not support an answer, say "Not evidenced in the video"
+       — never guess, never rely on prior knowledge about the world.
+    3. Prefer evidence with higher agreement scores; explicitly hedge when the
+       only support is a low-agreement (agreement < 0.5) visual caption.
+    4. For any question about order/timing, state the timestamps and reason from them.
+
+    Provide your grounded answer now.
+
+  critic_prepend_prompt: &critic_prepend_prompt |-
+    # Video request under discussion
+    ${task_description}
+
+    # Evidence available
+    ${preliminary_solution}
+
+  critic_append_prompt: &critic_append_prompt |-
+    You are ${role_description}, acting as a Chain-of-Verification checker.
+    Scrutinize the latest answer with these steps:
+    1. List each atomic claim in the answer.
+    2. For each claim, form a verification question and answer it INDEPENDENTLY
+       using only the evidence above (do not trust the answer's own reasoning).
+    3. Flag any claim that is: unsupported by a timestamp, contradicted by the
+       evidence, temporally inconsistent, or based on outside knowledge.
+    Then decide:
+    - If every claim is fully grounded and temporally consistent, end your
+      response with the token "[Agree]".
+    - Otherwise, list the specific ungrounded/incorrect claims and give the
+      corrected, evidence-cited version. Do not add new unsupported claims.
+
+    Now give your verification.
+
+  manager_prompt: &manager_prompt |-
+    Select the most appropriate critic to resolve the remaining disagreement
+    about the video answer.
+    # Request
+    ${task_description}
+    # Previous Answer
+    ${former_solution}
+    # Critics
+    ${critic_opinions}
+    # Previous Sentences
+    ${previous_sentence}
+
+  executor_prepend_prompt: &executor_prepend_prompt |-
+    You are the evidence-retrieval tool for a video-analysis team working on:
+    '''
+    ${task_description}
+    '''
+
+  executor_append_prompt: &executor_append_prompt |-
+    Given the current answer and the critics' verification questions, decide
+    which queries to run against the video evidence index to confirm or refute
+    each claim. Respond with the list of retrieval queries (one per line); each
+    will be executed with VideoEvidenceIndex.query() and its timestamped hits
+    returned to the team.
+
+  evaluator_prepend_prompt: &evaluator_prepend_prompt |-
+    # Request about the video
+    ${task_description}
+
+    # Analysts recruited this turn
+    ${all_role_description}
+
+    # Team's Answer
+    ${solution}
+
+    # Retrieved evidence / verification results
+    ${result}
+
+  evaluator_append_prompt: &evaluator_append_prompt |-
+    # Response Format Guidance
+    Judge groundedness, not eloquence.
+    Score: (0 or 1) — 1 ONLY if every factual claim cites supporting evidence
+      timestamps, no claim is contradicted by the evidence, and any temporal
+      ordering is consistent. Otherwise 0.
+    Response: (name the ungrounded/incorrect claims still remaining and what
+      evidence or analyst is needed to fix them next round.)
+
+
+name: video_understanding
+
+
+environment:
+  env_type: task-basic
+  max_turn: *max_turn
+  rule:
+    role_assigner:
+      type: role_description
+      cnt_agents: *cnt_agents
+    decision_maker:
+      # horizontal debate: analysts cross-check each other before consensus
+      type: horizontal
+    executor:
+      # NOTE: bind this to a VideoEvidenceIndex-backed executor (see
+      # documentation/video_understanding.md); 'none' keeps the swarm
+      # runnable on captions passed inline while that tool is wired.
+      type: none
+    evaluator:
+      type: basic
+
+agents:
+  - # role_assigner_agent
+    agent_type: role_assigner
+    name: analysis lead
+    max_retry: 1000
+    prepend_prompt_template: *role_assigner_prepend_prompt
+    append_prompt_template: *role_assigner_append_prompt
+    memory:
+      memory_type: chat_history
+    llm:
+      llm_type: gpt-4                 # swap for gemini-flash-latest (free tier) once registered
+      model: "gpt-4"
+      temperature: 0
+      max_tokens: 512
+    output_parser:
+      type: role_assigner
+
+  - # solver_agent (the Answerer / Summarizer)
+    agent_type: solver
+    name: Grounded Answerer
+    max_retry: 1000
+    prepend_prompt_template: *solver_prepend_prompt
+    append_prompt_template: *solver_append_prompt
+    memory:
+      memory_type: chat_history
+    llm:
+      llm_type: gpt-4
+      model: "gpt-4"
+      temperature: 0                  # deterministic: no creative drift
+      max_tokens: 1024
+    output_parser:
+      type: mgsm
+
+  - # critic agents — independent backbones for a real second opinion
+    agent_type: critic
+    name: Verifier 1
+    max_retry: 1000
+    role_description: |-
+      Waiting to be assigned.
+    prepend_prompt_template: *critic_prepend_prompt
+    append_prompt_template: *critic_append_prompt
+    memory:
+      memory_type: chat_history
+    llm:
+      llm_type: gpt-4
+      model: "gpt-4"
+      temperature: 0
+      max_tokens: 1024
+    output_parser:
+      type: mgsm-critic-agree
+
+  - # second critic on a DIFFERENT backbone (independence ⇒ uncorrelated errors)
+    agent_type: critic
+    name: Verifier 2
+    max_retry: 1000
+    role_description: |-
+      Waiting to be assigned.
+    prepend_prompt_template: *critic_prepend_prompt
+    append_prompt_template: *critic_append_prompt
+    memory:
+      memory_type: chat_history
+    llm:
+      llm_type: gpt-4                 # e.g. switch to a local Qwen/InternVL or gemini for diversity
+      model: "gpt-4"
+      temperature: 0
+      max_tokens: 1024
+    output_parser:
+      type: mgsm-critic-agree
+
+  - # evaluator_agent — the groundedness gate
+    agent_type: evaluator
+    name: Groundedness Evaluator
+    max_retry: 1000
+    role_description: |-
+      Evaluator
+    prepend_prompt_template: *evaluator_prepend_prompt
+    append_prompt_template: *evaluator_append_prompt
+    memory:
+      memory_type: chat_history
+    llm:
+      llm_type: gpt-4
+      model: "gpt-4"
+      temperature: 0
+      max_tokens: 1024
+    output_parser:
+      type: mgsm-evaluator

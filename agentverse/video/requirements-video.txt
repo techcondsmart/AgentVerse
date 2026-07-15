@@ -1,0 +1,25 @@
+# Optional extras for the video comprehension subsystem (agentverse/video).
+# Install only what your chosen backends need — everything is lazy-imported,
+# so a partial install still runs (degrading gracefully, see module docstrings).
+
+# --- perception: sampling ---
+opencv-python-headless>=4.9      # frame extraction + motion differencing
+scenedetect>=0.6.4               # shot / scene-cut detection
+Pillow>=10.0                     # image IO for caption backends
+
+# --- perception: embeddings (frame dedup + retrieval) ---
+sentence-transformers>=2.7       # bge-small text embeddings for VideoRAG index
+# torch + open_clip_torch OR imagebind for visual dedup (pick one):
+# open_clip_torch>=2.24
+# git+https://github.com/facebookresearch/ImageBind.git
+
+# --- perception: ASR ---
+faster-whisper>=1.0              # preferred: fast, low-VRAM, word timestamps
+# openai-whisper>=20231117       # reference fallback
+
+# --- caption backends (hosted) ---
+openai>=1.30                     # OpenAI-compatible client for Gemini/OpenRouter/Groq/vLLM
+
+# --- optional accuracy upgrade: detector-grounded verification (§6) ---
+# groundingdino-py                # open-vocabulary object detection
+# segment-anything-2              # SAM 2 tracking for cross-frame object consistency
