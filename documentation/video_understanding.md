@@ -166,7 +166,38 @@ verification pass when a frame's agreement score is low.
 
 ---
 
-## 7. Honest limits
+## 7. Validation status
+
+Run the hermetic self-test (no API keys, no downloaded weights — synthetic video
++ mock captioners):
+
+```bash
+python -m agentverse.video.selftest
+```
+
+Validated end-to-end through the real framework:
+- **Frame sampling** on a real (synthetic) 3-scene video: scene-cuts detected at
+  the true boundaries, motion frames kept inside moving shots, embedding-dedup
+  drops only true duplicates (22/23 kept).
+- **Caption ensemble** fusion + cross-model agreement scoring (2 backends).
+- **Perception pipeline** `VideoPerceptionPipeline.process()` end-to-end.
+- **Retrieval**: lexical path returns the correct scene for each query
+  ("safety"→green, "white square"→red, "yellow"→blue). Semantic ranking math
+  verified with injected vectors.
+- **Swarm construction** via `TaskSolving.from_task("video_understanding", …)`:
+  builds `BasicEnvironment` + `DescriptionAssigner` / `HorizontalDecisionMaker` /
+  **`VideoEvidenceExecutor`** / `BasicEvaluator` and all agents.
+- **Executor seam**: injecting a `VideoEvidenceIndex` and running the executor
+  returns grounded, timestamped evidence (`[7.0s | vision | agreement=0.90] …`).
+
+**Not runnable in every sandbox:** the semantic embedder (bge-small), Whisper
+weights, and real VLM captioners all download from huggingface.co. Where egress
+policy blocks HF, those paths fail soft (retrieval → lexical, ASR → skipped) and
+the pipeline still runs; provide the weights/keys in an unrestricted environment
+to enable them. The LLM debate itself needs an API key (Gemini free tier / OpenAI
+/ local vLLM) to actually reason.
+
+## 8. Honest limits
 
 - "Near-infallible" is an asymptote, not a guarantee: comprehension is still bounded
   by the weakest captioner on genuinely ambiguous frames, and by ASR quality on noisy

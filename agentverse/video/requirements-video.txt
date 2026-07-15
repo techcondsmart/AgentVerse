@@ -3,7 +3,10 @@
 # so a partial install still runs (degrading gracefully, see module docstrings).
 
 # --- perception: sampling ---
-opencv-python-headless>=4.9      # frame extraction + motion differencing
+# NOTE: AgentVerse's base pins numpy<2 (via langchain==0.0.157), so keep opencv
+# on the 4.8.x line, which is numpy-1.x compatible. opencv>=4.9 pulls numpy>=2
+# and will conflict — install the headless build to match the base image.
+opencv-python-headless==4.8.0.76 # frame extraction + motion differencing
 scenedetect>=0.6.4               # shot / scene-cut detection
 Pillow>=10.0                     # image IO for caption backends
 

@@ -6,3 +6,4 @@ from .base import BaseExecutor, NoneExecutor
 from .code_test import CodeTestExecutor
 from .tool_using import ToolUsingExecutor
 from .coverage_test import CoverageTestExecutor
+from .video_evidence import VideoEvidenceExecutor

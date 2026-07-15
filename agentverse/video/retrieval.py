@@ -113,10 +113,15 @@ class VideoEvidenceIndex:
         return self._lexical_rank(question, k)
 
     def _lexical_rank(self, question, k):
-        terms = {t.lower() for t in question.split() if len(t) > 2}
+        import re
+
+        def toks(s):
+            return {w for w in re.findall(r"[a-z0-9]+", s.lower()) if len(w) > 2}
+
+        terms = toks(question)
         scored = []
         for it in self._items:
-            overlap = len(terms & {t.lower() for t in it.text.split()})
+            overlap = len(terms & toks(it.text))
             if overlap:
                 scored.append(EvidenceHit(it.timestamp, it.modality, it.text,
                                           float(overlap), it.agreement, it.source))

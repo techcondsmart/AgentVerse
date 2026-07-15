@@ -161,10 +161,12 @@ environment:
       # horizontal debate: analysts cross-check each other before consensus
       type: horizontal
     executor:
-      # NOTE: bind this to a VideoEvidenceIndex-backed executor (see
-      # documentation/video_understanding.md); 'none' keeps the swarm
-      # runnable on captions passed inline while that tool is wired.
-      type: none
+      # Retrieval half of the VideoRAG loop: runs the critics' queries against
+      # the VideoEvidenceIndex. Inject the index via
+      #   VideoEvidenceExecutor.index = knowledge.index
+      # before running. Fails soft (empty evidence) if no index is bound, so the
+      # swarm still runs on captions passed inline.
+      type: video-evidence
     evaluator:
       type: basic
 
