@@ -47,6 +47,11 @@ else:
             "OpenAI API key is not set. Please set an environment variable OPENAI_API_KEY or "
             "AZURE_OPENAI_API_KEY."
         )
+        # Importing agentverse must not crash without a key: downstream modules
+        # import DEFAULT_CLIENT at module load (e.g. memory.chat_history). Any
+        # actual API call will still fail loudly with an auth error at use time.
+        DEFAULT_CLIENT = None
+        DEFAULT_CLIENT_ASYNC = None
     elif OPENAI_API_KEY:
         DEFAULT_CLIENT = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
         DEFAULT_CLIENT_ASYNC = AsyncOpenAI(
