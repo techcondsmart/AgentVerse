@@ -500,7 +500,13 @@ class OpenAIChat(BaseChatModel):
 
         model = self.args.model
         if model not in input_cost_map or model not in output_cost_map:
-            raise ValueError(f"Model type {model} not supported")
+            # Third-party OpenAI-compatible models (Gemini, OpenRouter, vLLM
+            # aliases, ...) have no entry in the OpenAI price table. Report
+            # zero spend instead of crashing the post-run metrics report.
+            logger.warn(
+                f"[get_spend] no price table entry for model {model}; reporting $0."
+            )
+            return 0.0
 
         return (
             self.total_prompt_tokens * input_cost_map[model] / 1000.0
