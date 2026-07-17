@@ -104,6 +104,24 @@ class OpenAIChatArgs(BaseModelArgs):
     presence_penalty: int = Field(default=0)
     frequency_penalty: int = Field(default=0)
 
+    def request_dict(self) -> Dict:
+        """Args for chat.completions.create, omitting no-op defaults.
+
+        Strict OpenAI-compatible providers (e.g. Gemini's compat endpoint)
+        reject unknown/unsupported fields such as frequency_penalty. Omitting
+        a parameter that sits at its no-op default (stop=None, penalties=0,
+        top_p=1, n=1) is semantically identical for OpenAI itself, so this is
+        safe for every backend.
+        """
+        d = self.dict()
+        if d.get("stop") is None:
+            d.pop("stop", None)
+        for key, noop in (("presence_penalty", 0), ("frequency_penalty", 0),
+                          ("top_p", 1), ("n", 1)):
+            if d.get(key) == noop:
+                d.pop(key, None)
+        return d
+
 
 # class OpenAICompletionArgs(OpenAIChatArgs):
 #     model: str = Field(default="text-davinci-003")
@@ -237,7 +255,7 @@ class OpenAIChat(BaseChatModel):
                 response = openai_client.chat.completions.create(
                     messages=messages,
                     functions=functions,
-                    **self.args.dict(),
+                    **self.args.request_dict(),
                 )
 
                 logger.log_prompt(
@@ -279,7 +297,7 @@ class OpenAIChat(BaseChatModel):
             else:
                 response = openai_client.chat.completions.create(
                     messages=messages,
-                    **self.args.dict(),
+                    **self.args.request_dict(),
                 )
                 logger.log_prompt(
                     [
@@ -333,7 +351,7 @@ class OpenAIChat(BaseChatModel):
                 response = await async_openai_client.chat.completions.create(
                     messages=messages,
                     functions=functions,
-                    **self.args.dict(),
+                    **self.args.request_dict(),
                 )
                 logger.log_prompt(
                     [
@@ -413,7 +431,7 @@ class OpenAIChat(BaseChatModel):
 
                 response = await async_openai_client.chat.completions.create(
                     messages=messages,
-                    **self.args.dict(),
+                    **self.args.request_dict(),
                 )
                 self.collect_metrics(response)
                 logger.log_prompt(
