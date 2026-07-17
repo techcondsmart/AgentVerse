@@ -180,9 +180,27 @@ LLM: role assignment → horizontal critic debate (CoVe) → solver → the
 `video-evidence` executor querying a real index → groundedness evaluator. It
 asserts one full reject round (ungrounded claim caught by the critics and the
 evaluator) followed by convergence on the grounded, timestamp-cited answer.
-Backend wiring to the Gemini OpenAI-compat endpoint was verified live up to the
-auth layer (invalid-key probe returns Google's 400 "pass a valid API key", i.e.
-transport + request shape are correct).
+
+**Validated LIVE on real Gemini models (free tier, 2026-07):**
+- *Perception*: the caption ensemble ran on real `gemini-2.5-flash` +
+  `gemini-flash-lite-latest` backends over a synthetic 3-scene video — structured
+  captions came back correct, including exact OCR of the on-screen text, and the
+  cross-model agreement score correctly flagged frames where one backend failed.
+- *Full swarm*: `TaskSolving.run()` with every agent on a real Gemini backbone
+  converged to an accepted, grounded answer citing evidence timestamps
+  ("SAFETY FIRST appears at 07:00; before it a red background (00:00, 03:10)
+  and a plain blue background (04:00)").
+- The live runs surfaced and led to fixes for three core AgentVerse bugs that
+  affect ANY third-party OpenAI-compatible backbone: token counters returning
+  None / raising for unknown model names, no-op default sampling params
+  (frequency_penalty etc.) rejected by strict endpoints, and get_spend()
+  crashing on models absent from the OpenAI price table.
+- Free-tier operational notes: Gemini per-model daily quotas are small for
+  2.5-flash (observed 20 req/day/project on these keys), so pace calls, cap
+  agent retries (the config's max_retry: 1000 would burn a day's quota on one
+  parse failure), and prefer per-model buckets (`gemini-flash-lite-latest`) for
+  the debate. Use `KeyPool` (backends.py) — pools routinely contain dead keys
+  (2 of 5 here were project-denied).
 
 Validated end-to-end through the real framework:
 - **Frame sampling** on a real (synthetic) 3-scene video: scene-cuts detected at
