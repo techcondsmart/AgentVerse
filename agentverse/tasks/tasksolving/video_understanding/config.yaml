@@ -26,6 +26,9 @@
 # =====================================================================
 
 cnt_agents: &cnt_agents 4
+# group needing roles each turn = solver + (cnt_agents-1) critics = cnt_agents;
+# the role_assigner parser enforces at least this many recruited roles.
+cnt_critic_agents: 4
 max_turn: &max_turn 5
 max_criticizing_rounds: 3
 
@@ -60,8 +63,10 @@ prompts:
     evidence. Evidence items look like:  [mm:ss | vision|audio | agreement=0.xx] text
     ${task_description}
 
-    # Retrieved evidence
-    ${preliminary_solution}
+    # Previous answer (revise it using the critics' feedback in the discussion)
+    ${former_solution}
+
+    # Evaluator advice
     ${advice}
 
   solver_append_prompt: &solver_append_prompt |-
@@ -203,9 +208,13 @@ agents:
     output_parser:
       type: mgsm
 
-  - # critic agents — independent backbones for a real second opinion
+  - # critic agent TEMPLATE — the loader replicates this single entry into
+    # (cnt_agents - 1) verifier instances; a second critic entry here would
+    # silently overwrite this one. To diversify critic backbones (debate with
+    # uncorrelated errors), swap `env.agents[AGENT_TYPES.CRITIC][i].llm` at
+    # runtime after TaskSolving.from_task().
     agent_type: critic
-    name: Verifier 1
+    name: Verifier
     max_retry: 1000
     role_description: |-
       Waiting to be assigned.
@@ -221,23 +230,23 @@ agents:
     output_parser:
       type: mgsm-critic-agree
 
-  - # second critic on a DIFFERENT backbone (independence ⇒ uncorrelated errors)
-    agent_type: critic
-    name: Verifier 2
+  - # executor_agent — required slot for rule.execute(); the video-evidence
+    # executor never calls this agent's LLM (it queries the index directly),
+    # but the environment needs the agent to exist.
+    agent_type: executor
+    name: Evidence Retriever
     max_retry: 1000
-    role_description: |-
-      Waiting to be assigned.
-    prepend_prompt_template: *critic_prepend_prompt
-    append_prompt_template: *critic_append_prompt
+    prepend_prompt_template: *executor_prepend_prompt
+    append_prompt_template: *executor_append_prompt
     memory:
       memory_type: chat_history
     llm:
-      llm_type: gpt-4                 # e.g. switch to a local Qwen/InternVL or gemini for diversity
+      llm_type: gpt-4
       model: "gpt-4"
       temperature: 0
-      max_tokens: 1024
+      max_tokens: 512
     output_parser:
-      type: mgsm-critic-agree
+      type: dummy
 
   - # evaluator_agent — the groundedness gate
     agent_type: evaluator
@@ -256,3 +265,5 @@ agents:
       max_tokens: 1024
     output_parser:
       type: mgsm-evaluator
+      dimensions:
+        - Score

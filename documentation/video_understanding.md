@@ -168,12 +168,21 @@ verification pass when a frame's agreement score is low.
 
 ## 7. Validation status
 
-Run the hermetic self-test (no API keys, no downloaded weights — synthetic video
-+ mock captioners):
+Run the hermetic self-tests (no API keys, no downloaded weights):
 
 ```bash
-python -m agentverse.video.selftest
+python -m agentverse.video.selftest        # perception + retrieval + executor
+python -m agentverse.video.swarm_selftest  # FULL TaskSolving.run() debate loop
 ```
+
+`swarm_selftest` drives the entire reasoning loop with a scripted deterministic
+LLM: role assignment → horizontal critic debate (CoVe) → solver → the
+`video-evidence` executor querying a real index → groundedness evaluator. It
+asserts one full reject round (ungrounded claim caught by the critics and the
+evaluator) followed by convergence on the grounded, timestamp-cited answer.
+Backend wiring to the Gemini OpenAI-compat endpoint was verified live up to the
+auth layer (invalid-key probe returns Google's 400 "pass a valid API key", i.e.
+transport + request shape are correct).
 
 Validated end-to-end through the real framework:
 - **Frame sampling** on a real (synthetic) 3-scene video: scene-cuts detected at
